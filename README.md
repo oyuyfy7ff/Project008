@@ -15,4 +15,5 @@ It uses `yt-dlp` and `mpv` to stream audio for research and CLI development stud
 2. pkg install python ffmpeg mpv -y
 3. pip install yt-dlp
 4. termux-setup-storage
-5. python oatza001
+5. git clone https://github.com/oyuyfy7ff/Project008.git
+6. python oatza001
