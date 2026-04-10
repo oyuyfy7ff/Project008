@@ -1,0 +1,198 @@
+import subprocess
+import os
+import json
+
+QUEUE_FILE = "queue.json"
+
+queue = []
+current = -1
+
+def show_banner():
+    print("""
+  ██████╗  █████╗ ████████╗███████╗ █████╗ 
+ ██╔═══██╗██╔══██╗╚══██╔══╝╚══███╔╝██╔══██╗
+ ██║   ██║███████║   ██║     ███╔╝ ███████║
+ ██║   ██║██╔══██║   ██║    ███╔╝  ██╔══██║
+ ╚██████╔╝██║  ██║   ██║   ███████╗██║  ██║
+  ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
+
+          [ project009 ]
+    """)
+
+def save_queue():
+    with open(QUEUE_FILE, "w") as f:
+        json.dump({"queue": queue, "current": current}, f)
+
+def load_queue():
+    global queue, current
+    if os.path.exists(QUEUE_FILE):
+        with open(QUEUE_FILE) as f:
+            data = json.load(f)
+            queue = data.get("queue", [])
+            current = data.get("current", -1)
+
+def search(query, limit=5):
+    print(f"กำลังหา: {query}")
+    result = subprocess.run(
+        ["yt-dlp", f"ytsearch{limit}:{query}",
+         "--print", "%(title)s|||%(webpage_url)s",
+         "--no-playlist"],
+        capture_output=True, text=True
+    )
+    songs = []
+    for line in result.stdout.strip().split("\n"):
+        if "|||" in line:
+            title, url = line.split("|||", 1)
+            songs.append({"title": title.strip(), "url": url.strip()})
+    return songs
+
+def get_stream_url(url):
+    result = subprocess.run(
+        ["yt-dlp", "-f", "bestaudio", "--get-url", url],
+        capture_output=True, text=True
+    )
+    return result.stdout.strip()
+
+def play(song):
+    print(f"กำลังเล่น: {song['title']}")
+    stream = get_stream_url(song["url"])
+    if stream:
+        subprocess.run(["mpv", "--no-video", "--term-osd-bar", stream])
+    else:
+        print("เล่นไม่ได้")
+
+def show_queue():
+    if not queue:
+        print("คิวว่างเปล่า")
+        return
+    print("\nคิวเพลง")
+    for i, s in enumerate(queue):
+        prefix = "[playing]" if i == current else f"{i+1}."
+        print(f"{prefix} {s['title']}")
+
+def show_help():
+    print("""
+คำสั่งทั้งหมด
+  search <ชื่อ>   ค้นหาเพลง
+  play <number>   เล่นเพลงในคิวตามหมายเลข
+  next            เพลงถัดไป
+  prev            เพลงก่อนหน้า
+  queue           ดูคิวเพลง
+  clear           ล้างคิว
+  remove <number> ลบเพลงออกจากคิว
+  repeat          เล่นซ้ำเพลงปัจจุบัน
+  quit            ออกจากโปรแกรม
+""")
+
+def main():
+    load_queue()
+    show_banner()
+    print("พิมพ์ help ดูคำสั่ง")
+    global current
+
+    while True:
+        try:
+            cmd = input("\n> ").strip()
+        except KeyboardInterrupt:
+            save_queue()
+            print("\nลาก่อนครับ")
+            break
+
+        if not cmd:
+            continue
+
+        parts = cmd.split(" ", 1)
+        action = parts[0].lower()
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if action == "quit":
+            save_queue()
+            print("ลาก่อนครับ")
+            break
+
+        elif action == "help":
+            show_help()
+
+        elif action == "search":
+            if not arg:
+                print("ใส่ชื่อเพลงด้วยครับ")
+                continue
+            results = search(arg)
+            if not results:
+                print("ไม่พบเพลง")
+                continue
+            for i, s in enumerate(results):
+                print(f"{i+1}. {s['title']}")
+            pick = input("\nเลือก (1-5) / a=เพิ่มทั้งหมด / Enter=ข้าม: ").strip()
+            if pick == "a":
+                queue.extend(results)
+                print(f"เพิ่ม {len(results)} เพลงในคิว")
+            elif pick.isdigit() and 1 <= int(pick) <= len(results):
+                idx = int(pick) - 1
+                queue.append(results[idx])
+                current = len(queue) - 1
+                save_queue()
+                play(queue[current])
+
+        elif action == "play":
+            if arg.isdigit():
+                idx = int(arg) - 1
+                if 0 <= idx < len(queue):
+                    current = idx
+                    save_queue()
+                    play(queue[current])
+                else:
+                    print("หมายเลขไม่ถูกต้อง")
+            else:
+                print("ใส่หมายเลขเพลงด้วยครับ")
+
+        elif action == "next":
+            if current < len(queue) - 1:
+                current += 1
+                save_queue()
+                play(queue[current])
+            else:
+                print("ไม่มีเพลงถัดไป")
+
+        elif action == "prev":
+            if current > 0:
+                current -= 1
+                save_queue()
+                play(queue[current])
+            else:
+                print("ไม่มีเพลงก่อนหน้า")
+
+        elif action == "repeat":
+            if current >= 0:
+                play(queue[current])
+            else:
+                print("ยังไม่ได้เล่นเพลงใด")
+
+        elif action == "queue":
+            show_queue()
+
+        elif action == "clear":
+            queue.clear()
+            current = -1
+            save_queue()
+            print("ล้างคิวแล้ว")
+
+        elif action == "remove":
+            if arg.isdigit():
+                idx = int(arg) - 1
+                if 0 <= idx < len(queue):
+                    removed = queue.pop(idx)
+                    print(f"ลบ: {removed['title']}")
+                    if current >= len(queue):
+                        current = len(queue) - 1
+                    save_queue()
+                else:
+                    print("หมายเลขไม่ถูกต้อง")
+            else:
+                print("ใส่หมายเลขด้วยครับ")
+
+        else:
+            print("ไม่รู้จักคำสั่ง พิมพ์ help ดูคำสั่งทั้งหมด")
+
+if __name__ == "__main__":
+    main()
