@@ -1,6 +1,6 @@
 # Project008
 A command-line tool for streaming audio from web sources for educational and testing purposes.
-# 🎧 OATZA Audio Tool (Project009)
+# 🎧 OATZA Audio Tool (Project008)
 
 This is a Python-driven audio player interface for Terminal. 
 It uses `yt-dlp` and `mpv` to stream audio for research and CLI development study.
